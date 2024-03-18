@@ -451,7 +451,6 @@ else
     ext.config_options << ENV["EXTOPTS"] if ENV["EXTOPTS"]
     ext.cross_compile  = true
     ext.cross_platform = CROSS_RUBIES.map(&:platform).uniq
-    ext.cross_config_options << "--enable-cross-build"
     ext.cross_compiling do |spec|
       spec.files.reject! { |path| File.fnmatch?("ports/*", path) }
       spec.files.reject! { |path| File.fnmatch?("gumbo-parser/**/*", path) }

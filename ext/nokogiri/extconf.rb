@@ -2,9 +2,15 @@
 
 # rubocop:disable Style/GlobalVars
 
-ENV["RC_ARCHS"] = "" if RUBY_PLATFORM.include?("darwin")
-
 require "mkmf"
+
+# For compatibility with Ruby 3.3 and earlier
+MakeMakefile::RbConfig ||= RbConfig
+
+TARGET_RUBY_PLATFORM = MakeMakefile::RbConfig::CONFIG["platform"]
+
+ENV["RC_ARCHS"] = "" if TARGET_RUBY_PLATFORM.include?("darwin")
+
 require "rbconfig"
 require "fileutils"
 require "shellwords"
@@ -138,7 +144,7 @@ NOKOGIRI_HELP_MESSAGE = <<~HELP
           Equivalent to `--enable-system-libraries` when set, even if nil or blank.
 
       CC
-          Use this path to invoke the compiler instead of `RbConfig::CONFIG['CC']`
+          Use this path to invoke the compiler instead of `MakeMakefile::RbConfig::CONFIG['CC']`
 
       CPPFLAGS
           If this string is accepted by the C preprocessor, add it to the flags passed to the C preprocessor
@@ -166,7 +172,7 @@ def config_static?
 end
 
 def config_cross_build?
-  enable_config("cross-build")
+  RbConfig::CONFIG["arch"] != MakeMakefile::RbConfig::CONFIG["arch"]
 end
 
 def config_system_libraries?
@@ -176,23 +182,23 @@ def config_system_libraries?
 end
 
 def windows?
-  RbConfig::CONFIG["target_os"].match?(/mingw|mswin/)
+  MakeMakefile::RbConfig::CONFIG["target_os"].match?(/mingw|mswin/)
 end
 
 def solaris?
-  RbConfig::CONFIG["target_os"].include?("solaris")
+  MakeMakefile::RbConfig::CONFIG["target_os"].include?("solaris")
 end
 
 def darwin?
-  RbConfig::CONFIG["target_os"].include?("darwin")
+  MakeMakefile::RbConfig::CONFIG["target_os"].include?("darwin")
 end
 
 def openbsd?
-  RbConfig::CONFIG["target_os"].include?("openbsd")
+  MakeMakefile::RbConfig::CONFIG["target_os"].include?("openbsd")
 end
 
 def aix?
-  RbConfig::CONFIG["target_os"].include?("aix")
+  MakeMakefile::RbConfig::CONFIG["target_os"].include?("aix")
 end
 
 def nix?
@@ -437,12 +443,14 @@ def process_recipe(name, version, static_p, cross_p, cacheable_p = true)
 
   MiniPortile.new(name, version).tap do |recipe|
     def recipe.port_path
-      "#{@target}/#{RUBY_PLATFORM}/#{@name}/#{@version}"
+      "#{@target}/#{TARGET_RUBY_PLATFORM}/#{@name}/#{@version}"
     end
 
     # We use 'host' to set compiler prefix for cross-compiling. Prefer host_alias over host. And
     # prefer i686 (what external dev tools use) to i386 (what ruby's configure.ac emits).
-    recipe.host = RbConfig::CONFIG["host_alias"].empty? ? RbConfig::CONFIG["host"] : RbConfig::CONFIG["host_alias"]
+    recipe.host = MakeMakefile::RbConfig::CONFIG["host_alias"].empty? ?
+      MakeMakefile::RbConfig::CONFIG["host"] :
+      MakeMakefile::RbConfig::CONFIG["host_alias"]
     recipe.host = recipe.host.gsub("i386", "i686")
 
     recipe.target = File.join(PACKAGE_ROOT_DIR, "ports") if cacheable_p
@@ -490,10 +498,10 @@ def process_recipe(name, version, static_p, cross_p, cacheable_p = true)
       ]
     end
 
-    if RbConfig::CONFIG["target_cpu"] == "universal"
+    if MakeMakefile::RbConfig::CONFIG["target_cpu"] == "universal"
       ["CFLAGS", "LDFLAGS"].each do |key|
         unless env[key].include?("-arch")
-          env[key] = concat_flags(env[key], RbConfig::CONFIG["ARCH_FLAG"])
+          env[key] = concat_flags(env[key], MakeMakefile::RbConfig::CONFIG["ARCH_FLAG"])
         end
       end
     end
@@ -502,7 +510,7 @@ def process_recipe(name, version, static_p, cross_p, cacheable_p = true)
       "#{key}=#{value.strip}"
     end
 
-    checkpoint = "#{recipe.target}/#{recipe.name}-#{recipe.version}-#{RUBY_PLATFORM}.installed"
+    checkpoint = "#{recipe.target}/#{recipe.name}-#{recipe.version}-#{TARGET_RUBY_PLATFORM}.installed"
     if File.exist?(checkpoint) && !recipe.source_directory
       message("Building Nokogiri with a packaged version of #{name}-#{version}.\n")
     else
@@ -609,7 +617,7 @@ end
 def needs_darwin_linker_hack
   config_cross_build? &&
     darwin? &&
-    Gem::Requirement.new("~> 3.2").satisfied_by?(Gem::Version.new(RbConfig::CONFIG["ruby_version"].split("+").first))
+    Gem::Requirement.new("~> 3.2").satisfied_by?(Gem::Version.new(MakeMakefile::RbConfig::CONFIG["ruby_version"].split("+").first))
 end
 
 #
@@ -627,11 +635,11 @@ if openbsd? && !config_system_libraries?
 end
 
 if ENV["CC"]
-  RbConfig::CONFIG["CC"] = RbConfig::MAKEFILE_CONFIG["CC"] = ENV["CC"]
+  MakeMakefile::RbConfig::CONFIG["CC"] = RbConfig::MAKEFILE_CONFIG["CC"] = ENV["CC"]
 end
 
 # use same c compiler for libxml and libxslt
-ENV["CC"] = RbConfig::CONFIG["CC"]
+ENV["CC"] = MakeMakefile::RbConfig::CONFIG["CC"]
 
 if arg_config("--prevent-strip")
   old_cflags = $CFLAGS.split.join(" ")
