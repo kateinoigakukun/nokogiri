@@ -205,6 +205,10 @@ def nix?
   !(windows? || solaris? || darwin?)
 end
 
+def wasi?
+  MakeMakefile::RbConfig::CONFIG["target_os"].include?("wasi")
+end
+
 def truffle?
   RUBY_ENGINE == "truffleruby"
 end
@@ -641,6 +645,10 @@ end
 # use same c compiler for libxml and libxslt
 ENV["CC"] = MakeMakefile::RbConfig::CONFIG["CC"]
 
+["RANLIB", "AR"].each do |key|
+  ENV[key] = MakeMakefile::RbConfig::CONFIG[key]
+end
+
 if arg_config("--prevent-strip")
   old_cflags = $CFLAGS.split.join(" ")
   old_ldflags = $LDFLAGS.split.join(" ")
@@ -652,6 +660,8 @@ if arg_config("--prevent-strip")
   puts "Prevent stripping by removing '-s' from $LDFLAGS" if old_ldflags != $LDFLAGS
   puts "Prevent stripping by removing '-s' from $DLDFLAGS" if old_dldflags != $DLDFLAGS
 end
+
+$CFLAGS << " -Wno-implicit-function-declaration"
 
 # adopt environment config
 append_cflags(ENV["CFLAGS"].split) unless ENV["CFLAGS"].nil?
@@ -914,6 +924,10 @@ else
       cflags = concat_flags(cflags, "-ULIBXML_STATIC", "-DIN_LIBXML")
     end
 
+    if wasi?
+      recipe.configure_options << "--without-http"
+    end
+
     recipe.configure_options << if source_dir
       "--config-cache"
     else
@@ -1070,7 +1084,7 @@ libgumbo_recipe = process_recipe("libgumbo", "1.0.0-nokogiri", static_p, cross_b
       cflags = concat_flags(ENV["CFLAGS"], "-fPIC", "-O2", "-g")
 
       env = { "CC" => gcc_cmd, "CFLAGS" => cflags }
-      if config_cross_build?
+      if config_cross_build? && !host.include?("wasm")
         if host.include?("darwin")
           env["AR"] = "#{host}-libtool"
           env["ARFLAGS"] = "-o"

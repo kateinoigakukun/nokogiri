@@ -1,0 +1,61 @@
+From d601e05a2dbb33c3b4792d868bef7b2f5846282b Mon Sep 17 00:00:00 2001
+From: Yuta Saito <kateinoigakukun@gmail.com>
+Date: Wed, 21 Feb 2024 04:58:50 +0000
+Subject: [PATCH] Guard out use of `dup` for WASI platform
+
+---
+ xmlIO.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/xmlIO.c b/xmlIO.c
+index 95d27157..08b00000 100644
+--- a/xmlIO.c
++++ b/xmlIO.c
+@@ -1066,6 +1066,7 @@ xmlGzfileOpen_real (const char *filename) {
+     const char *path = NULL;
+     gzFile fd;
+ 
++#ifndef __wasi__
+     if (!strcmp(filename, "-")) {
+         int duped_fd = dup(fileno(stdin));
+         fd = gzdopen(duped_fd, "rb");
+@@ -1075,6 +1076,7 @@ xmlGzfileOpen_real (const char *filename) {
+ 
+ 	return((void *) fd);
+     }
++#endif
+ 
+     if (!xmlStrncasecmp(BAD_CAST filename, BAD_CAST "file://localhost/", 17))
+ #if defined (_WIN32)
+@@ -1145,6 +1147,7 @@ xmlGzfileOpenW (const char *filename, int compression) {
+     gzFile fd;
+ 
+     snprintf(mode, sizeof(mode), "wb%d", compression);
++#ifndef __wasi__
+     if (!strcmp(filename, "-")) {
+         int duped_fd = dup(fileno(stdout));
+         fd = gzdopen(duped_fd, "rb");
+@@ -1154,6 +1157,7 @@ xmlGzfileOpenW (const char *filename, int compression) {
+ 
+ 	return((void *) fd);
+     }
++#endif
+ 
+     if (!xmlStrncasecmp(BAD_CAST filename, BAD_CAST "file://localhost/", 17))
+ #if defined (_WIN32)
+@@ -1272,10 +1276,12 @@ xmlXzfileOpen_real (const char *filename) {
+     const char *path = NULL;
+     xzFile fd;
+ 
++#ifndef __wasi__
+     if (!strcmp(filename, "-")) {
+         fd = __libxml2_xzdopen(dup(fileno(stdin)), "rb");
+ 	return((void *) fd);
+     }
++#endif
+ 
+     if (!xmlStrncasecmp(BAD_CAST filename, BAD_CAST "file://localhost/", 17)) {
+ 	path = &filename[16];
+-- 
+2.43.0
+
